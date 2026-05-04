@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 from pathlib import Path
 
@@ -86,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Open a browser OAuth flow and print a Google Ads refresh token",
     )
     refresh.add_argument("--client-id", required=True)
-    refresh.add_argument("--client-secret", required=True)
+    refresh.add_argument("--client-secret", help="OAuth client secret. Omit to enter it securely.")
     return parser
 
 
@@ -107,8 +108,9 @@ def main() -> None:
             run_gaql(settings, customer_id=args.customer_id, query=query, limit=args.limit)
         )
     if args.command == "generate-refresh-token":
+        client_secret = args.client_secret or getpass.getpass("OAuth client secret: ")
         raise SystemExit(
-            generate_refresh_token(client_id=args.client_id, client_secret=args.client_secret)
+            generate_refresh_token(client_id=args.client_id, client_secret=client_secret)
         )
 
     parser.error(f"Unknown command: {args.command}")

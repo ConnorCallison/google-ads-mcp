@@ -41,8 +41,7 @@ You can generate the refresh token with:
 
 ```bash
 uv run google-ads-mcp-cli generate-refresh-token \
-  --client-id YOUR_CLIENT_ID \
-  --client-secret YOUR_CLIENT_SECRET
+  --client-id YOUR_CLIENT_ID
 ```
 
 ## Run The MCP Server
@@ -76,7 +75,7 @@ queries:
 
 ```bash
 uv run google-ads-mcp-cli check-config
-uv run google-ads-mcp-cli generate-refresh-token --client-id ... --client-secret ...
+uv run google-ads-mcp-cli generate-refresh-token --client-id ...
 uv run google-ads-mcp-cli list-customers
 uv run google-ads-mcp-cli gaql --customer-id 1234567890 --file examples/campaign_snapshot.gaql
 ```
