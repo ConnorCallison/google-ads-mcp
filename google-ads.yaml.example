@@ -1,0 +1,14 @@
+# Copy this file to google-ads.yaml and fill in values from your Google Ads API setup.
+# Official setup guide:
+# https://developers.google.com/google-ads/api/docs/get-started/make-first-call
+
+developer_token: INSERT_DEVELOPER_TOKEN_HERE
+client_id: INSERT_OAUTH_CLIENT_ID_HERE
+client_secret: INSERT_OAUTH_CLIENT_SECRET_HERE
+refresh_token: INSERT_OAUTH_REFRESH_TOKEN_HERE
+
+# Optional, but recommended if you access client accounts through an MCC/manager account.
+# login_customer_id: INSERT_MANAGER_CUSTOMER_ID_WITHOUT_DASHES
+
+# Keep this enabled unless you understand protobuf-plus tradeoffs.
+use_proto_plus: true

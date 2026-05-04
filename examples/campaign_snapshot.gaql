@@ -1,0 +1,14 @@
+SELECT
+  campaign.id,
+  campaign.name,
+  campaign.status,
+  campaign.advertising_channel_type,
+  campaign_budget.id,
+  campaign_budget.amount_micros,
+  metrics.cost_micros,
+  metrics.clicks,
+  metrics.conversions
+FROM campaign
+WHERE segments.date DURING LAST_30_DAYS
+ORDER BY metrics.cost_micros DESC
+LIMIT 50
