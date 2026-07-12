@@ -11,7 +11,11 @@ from google_ads_mcp.policy import validate_budget_change, validate_limit
 
 
 def _serialize_google_ads_row(row: Any) -> dict[str, Any]:
-    return GoogleAdsClient.serialize(row)
+    return type(row).to_dict(
+        row,
+        preserving_proto_field_name=False,
+        use_integers_for_enums=False,
+    )
 
 
 class GoogleAdsGateway:
@@ -85,11 +89,11 @@ class GoogleAdsGateway:
         operation.update.amount_micros = amount_micros
         operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["amount_micros"]))
 
-        response = service.mutate_campaign_budgets(
-            customer_id=customer_id,
-            operations=[operation],
-            validate_only=dry_run,
-        )
+        request = self.client.get_type("MutateCampaignBudgetsRequest")
+        request.customer_id = customer_id
+        request.operations.append(operation)
+        request.validate_only = dry_run
+        response = service.mutate_campaign_budgets(request=request)
         return {
             "resource_names": [result.resource_name for result in response.results],
             "previous_amount_micros": current_amount,
@@ -115,11 +119,11 @@ class GoogleAdsGateway:
         operation.update.status = getattr(self.client.enums.CampaignStatusEnum, normalized)
         operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
 
-        response = service.mutate_campaigns(
-            customer_id=customer_id,
-            operations=[operation],
-            validate_only=dry_run,
-        )
+        request = self.client.get_type("MutateCampaignsRequest")
+        request.customer_id = customer_id
+        request.operations.append(operation)
+        request.validate_only = dry_run
+        response = service.mutate_campaigns(request=request)
         return {
             "resource_names": [result.resource_name for result in response.results],
             "status": normalized,
@@ -152,11 +156,11 @@ class GoogleAdsGateway:
             self.client.enums.KeywordMatchTypeEnum, normalized_match_type
         )
 
-        response = criterion_service.mutate_campaign_criteria(
-            customer_id=customer_id,
-            operations=[operation],
-            validate_only=dry_run,
-        )
+        request = self.client.get_type("MutateCampaignCriteriaRequest")
+        request.customer_id = customer_id
+        request.operations.append(operation)
+        request.validate_only = dry_run
+        response = criterion_service.mutate_campaign_criteria(request=request)
         return {
             "resource_names": [result.resource_name for result in response.results],
             "keyword_text": keyword_text.strip(),
@@ -171,17 +175,23 @@ class GoogleAdsGateway:
         recommendation_id: str,
         dry_run: bool,
     ) -> dict[str, Any]:
+        if dry_run:
+            return {
+                "resource_names": [],
+                "recommendation_id": recommendation_id,
+                "validate_only": True,
+            }
+
         service = self.client.get_service("RecommendationService")
         operation = self.client.get_type("ApplyRecommendationOperation")
         operation.resource_name = service.recommendation_path(customer_id, recommendation_id)
-        response = service.apply_recommendation(
-            customer_id=customer_id,
-            operations=[operation],
-            partial_failure=False,
-            validate_only=dry_run,
-        )
+        request = self.client.get_type("ApplyRecommendationRequest")
+        request.customer_id = customer_id
+        request.operations.append(operation)
+        request.partial_failure = False
+        response = service.apply_recommendation(request=request)
         return {
             "resource_names": [result.resource_name for result in response.results],
             "recommendation_id": recommendation_id,
-            "validate_only": dry_run,
+            "validate_only": False,
         }
