@@ -65,6 +65,80 @@ def search_google_ads(
 
 
 @mcp.tool()
+def suggest_geo_targets(
+    query: str,
+    country_code: str = "US",
+    locale: str = "en",
+) -> list[dict[str, Any]]:
+    """Resolve a place name to Google Ads geo-target IDs for hyperlocal planning."""
+    return gateway.suggest_geo_targets(
+        query=query,
+        country_code=country_code,
+        locale=locale,
+    )
+
+
+@mcp.tool()
+def generate_keyword_ideas(
+    customer_id: str | None,
+    keywords: list[str] | None = None,
+    page_url: str | None = None,
+    location_ids: list[str] | None = None,
+    language_id: str = "1000",
+    network: str = "GOOGLE_SEARCH",
+    include_adult_keywords: bool = False,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Generate Google Search keyword ideas with historical volume and bid metrics."""
+    resolved_customer_id = settings.customer_id(customer_id)
+    return gateway.generate_keyword_ideas(
+        customer_id=resolved_customer_id,
+        keywords=keywords or [],
+        page_url=page_url,
+        location_ids=location_ids or [],
+        language_id=language_id,
+        network=network,
+        include_adult_keywords=include_adult_keywords,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+def generate_keyword_forecast(
+    customer_id: str | None,
+    keywords: list[str],
+    daily_budget_micros: int,
+    location_ids: list[str] | None = None,
+    language_id: str = "1000",
+    match_type: str = "EXACT",
+    network: str = "GOOGLE_SEARCH",
+    bidding_strategy: str = "MAXIMIZE_CLICKS",
+    max_cpc_bid_micros: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    currency_code: str = "USD",
+    negative_keywords: list[str] | None = None,
+) -> dict[str, Any]:
+    """Forecast Search impressions, clicks, CPC, cost, and optional conversions."""
+    resolved_customer_id = settings.customer_id(customer_id)
+    return gateway.generate_keyword_forecast(
+        customer_id=resolved_customer_id,
+        keywords=keywords,
+        location_ids=location_ids or [],
+        language_id=language_id,
+        match_type=match_type,
+        network=network,
+        bidding_strategy=bidding_strategy,
+        daily_budget_micros=daily_budget_micros,
+        max_cpc_bid_micros=max_cpc_bid_micros,
+        start_date=start_date,
+        end_date=end_date,
+        currency_code=currency_code,
+        negative_keywords=negative_keywords or [],
+    )
+
+
+@mcp.tool()
 def get_campaign_budget(customer_id: str | None, budget_id: str) -> dict[str, Any] | None:
     """Fetch a campaign budget by numeric campaign budget ID."""
     resolved_customer_id = settings.customer_id(customer_id)
