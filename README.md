@@ -10,6 +10,9 @@ policy, and writes a JSONL audit record.
 
 - List accessible Google Ads customers.
 - Run arbitrary GAQL queries.
+- Resolve place names to Google Ads geo-target IDs.
+- Generate keyword ideas with historical search volume, competition, and bid ranges.
+- Forecast proposed Search impressions, clicks, CPC, cost, and conversions without creating a campaign.
 - Inspect campaign budgets.
 - Set campaign budget amounts.
 - Pause, enable, or remove campaigns.
@@ -99,6 +102,16 @@ cat examples/campaign_snapshot.gaql
 ```
 
 Then call `search_google_ads` with that query.
+
+## Keyword Planning
+
+Use `suggest_geo_targets` to resolve names such as `Humboldt County, California` to Google geo
+target IDs. `generate_keyword_ideas` accepts keyword seeds, a page URL, or both, plus optional
+language and geo-target IDs. `generate_keyword_forecast` models a proposed Search ad group and
+returns Google's non-guaranteed traffic and cost forecast without creating campaign resources.
+
+Keyword planning calls are more tightly rate-limited than normal reporting calls. Cache results and
+rerun them only when the keyword set, targeting, bid strategy, budget, or forecast period changes.
 
 ## Development
 
