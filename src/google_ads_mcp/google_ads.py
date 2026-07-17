@@ -202,8 +202,15 @@ class GoogleAdsGateway:
         if normalized_match_type not in {"BROAD", "PHRASE", "EXACT"}:
             raise ValueError("match_type must be BROAD, PHRASE, or EXACT")
         normalized_network = network.upper()
-        if normalized_network not in {"GOOGLE_SEARCH", "GOOGLE_SEARCH_AND_PARTNERS"}:
-            raise ValueError("network must be GOOGLE_SEARCH or GOOGLE_SEARCH_AND_PARTNERS")
+        if normalized_network != "GOOGLE_SEARCH":
+            raise ValueError(
+                "Google Ads forecast requests support GOOGLE_SEARCH only; "
+                "the current API no longer exposes a forecast network field"
+            )
+        if cleaned_negatives:
+            raise ValueError(
+                "negative_keywords are not supported by the current Google Ads forecast API"
+            )
         normalized_strategy = bidding_strategy.upper()
         if normalized_strategy not in {"MANUAL_CPC", "MAXIMIZE_CLICKS", "MAXIMIZE_CONVERSIONS"}:
             raise ValueError(
@@ -230,14 +237,9 @@ class GoogleAdsGateway:
 
         campaign = request.campaign
         campaign.language_constants.append(f"languageConstants/{cleaned_language}")
-        campaign.keyword_plan_network = getattr(
-            self.client.enums.KeywordPlanNetworkEnum, normalized_network
+        campaign.geo_target_constants.extend(
+            f"geoTargetConstants/{location_id}" for location_id in cleaned_locations
         )
-        for location_id in cleaned_locations:
-            modifier = self.client.get_type("CriterionBidModifier")
-            modifier.geo_target_constant = f"geoTargetConstants/{location_id}"
-            modifier.bid_modifier = 1.0
-            campaign.geo_modifiers.append(modifier)
 
         strategy = campaign.bidding_strategy
         if normalized_strategy == "MANUAL_CPC":
@@ -257,24 +259,14 @@ class GoogleAdsGateway:
             )
 
         ad_group = self.client.get_type("ForecastAdGroup")
-        if max_cpc_bid_micros is not None:
-            ad_group.max_cpc_bid_micros = max_cpc_bid_micros
         for keyword_text in cleaned_keywords:
-            keyword = self.client.get_type("BiddableKeyword")
-            keyword.keyword.text = keyword_text
-            keyword.keyword.match_type = getattr(
-                self.client.enums.KeywordMatchTypeEnum, normalized_match_type
-            )
-            if max_cpc_bid_micros is not None:
-                keyword.max_cpc_bid_micros = max_cpc_bid_micros
-            ad_group.biddable_keywords.append(keyword)
-        campaign.ad_groups.append(ad_group)
-
-        for keyword_text in cleaned_negatives:
             keyword = self.client.get_type("KeywordInfo")
             keyword.text = keyword_text
-            keyword.match_type = self.client.enums.KeywordMatchTypeEnum.EXACT
-            campaign.negative_keywords.append(keyword)
+            keyword.match_type = getattr(
+                self.client.enums.KeywordMatchTypeEnum, normalized_match_type
+            )
+            ad_group.keywords.append(keyword)
+        campaign.ad_groups.append(ad_group)
 
         service = self.client.get_service("KeywordPlanIdeaService")
         try:
@@ -287,6 +279,7 @@ class GoogleAdsGateway:
                 "endDate": resolved_end.isoformat(),
             },
             "currencyCode": request.currency_code,
+            "network": normalized_network,
             "biddingStrategy": normalized_strategy,
             "keywordCount": len(cleaned_keywords),
             "metrics": _serialize_google_ads_message(response.campaign_forecast_metrics),

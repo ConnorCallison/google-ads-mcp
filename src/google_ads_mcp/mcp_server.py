@@ -119,7 +119,12 @@ def generate_keyword_forecast(
     currency_code: str = "USD",
     negative_keywords: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Forecast Search impressions, clicks, CPC, cost, and optional conversions."""
+    """Forecast Google Search impressions, clicks, CPC, cost, and optional conversions.
+
+    The current Google Ads forecast API supports Google Search only and does not expose
+    negative-keyword inputs. Passing either an alternate network or negative keywords
+    returns a clear validation error rather than silently changing the forecast.
+    """
     resolved_customer_id = settings.customer_id(customer_id)
     return gateway.generate_keyword_forecast(
         customer_id=resolved_customer_id,

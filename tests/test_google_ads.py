@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from google.ads.googleads.client import GoogleAdsClient
+
 from google_ads_mcp.google_ads import GoogleAdsGateway, _serialize_google_ads_row
 
 
@@ -138,9 +140,7 @@ class _FakeForecastRequest:
         self.forecast_period = SimpleNamespace(start_date="", end_date="")
         self.campaign = SimpleNamespace(
             language_constants=[],
-            geo_modifiers=[],
-            keyword_plan_network=None,
-            negative_keywords=[],
+            geo_target_constants=[],
             ad_groups=[],
             bidding_strategy=SimpleNamespace(
                 manual_cpc_bidding_strategy=SimpleNamespace(
@@ -222,19 +222,8 @@ class _FakePlanningClient:
             return _FakeKeywordIdeasRequest()
         if name == "GenerateKeywordForecastMetricsRequest":
             return _FakeForecastRequest()
-        if name == "CriterionBidModifier":
-            return SimpleNamespace(geo_target_constant="", bid_modifier=0.0)
         if name == "ForecastAdGroup":
-            return SimpleNamespace(
-                max_cpc_bid_micros=0,
-                biddable_keywords=[],
-                negative_keywords=[],
-            )
-        if name == "BiddableKeyword":
-            return SimpleNamespace(
-                keyword=SimpleNamespace(text="", match_type=None),
-                max_cpc_bid_micros=0,
-            )
+            return SimpleNamespace(keywords=[])
         if name == "KeywordInfo":
             return SimpleNamespace(text="", match_type=None)
         raise AssertionError(f"Unexpected type request: {name}")
@@ -309,7 +298,7 @@ def test_generate_keyword_forecast_builds_non_mutating_campaign_model():
         start_date="2030-01-01",
         end_date="2030-01-30",
         currency_code="usd",
-        negative_keywords=["jobs"],
+        negative_keywords=[],
     )
 
     request = fake_client.service.forecast_request
@@ -317,18 +306,106 @@ def test_generate_keyword_forecast_builds_non_mutating_campaign_model():
     assert request.customer_id == "5703884860"
     assert request.currency_code == "USD"
     assert campaign.language_constants == ["languageConstants/1000"]
-    assert campaign.geo_modifiers[0].geo_target_constant == "geoTargetConstants/21137"
+    assert campaign.geo_target_constants == ["geoTargetConstants/21137"]
     assert (
         campaign.bidding_strategy.maximize_clicks_bidding_strategy.daily_target_spend_micros
         == 5_000_000
     )
-    assert [keyword.keyword.text for keyword in campaign.ad_groups[0].biddable_keywords] == [
+    assert [keyword.text for keyword in campaign.ad_groups[0].keywords] == [
         "event ticketing software",
         "sell event tickets",
     ]
-    assert campaign.negative_keywords[0].text == "jobs"
+    assert result["network"] == "GOOGLE_SEARCH"
     assert result["metrics"] == {
         "impressions": 1200.0,
         "clicks": 84.0,
         "costMicros": 25_000_000,
     }
+
+
+def test_generate_keyword_forecast_matches_installed_google_ads_schema():
+    google_client = GoogleAdsClient(
+        credentials=None,
+        developer_token="test",
+        use_proto_plus=True,
+    )
+    service = _FakeKeywordPlanService()
+
+    def generate_keyword_forecast_metrics(*, request: Any) -> Any:
+        service.forecast_request = request
+        return SimpleNamespace(
+            campaign_forecast_metrics=google_client.get_type("KeywordForecastMetrics")
+        )
+
+    service.generate_keyword_forecast_metrics = generate_keyword_forecast_metrics
+    schema_client = SimpleNamespace(
+        enums=google_client.enums,
+        get_type=google_client.get_type,
+        get_service=lambda name: service,
+    )
+    gateway = GoogleAdsGateway(settings=None)  # type: ignore[arg-type]
+    gateway.__dict__["client"] = schema_client
+
+    result = gateway.generate_keyword_forecast(
+        customer_id="5703884860",
+        keywords=["event ticketing software"],
+        location_ids=["21137"],
+        language_id="1000",
+        match_type="PHRASE",
+        network="GOOGLE_SEARCH",
+        bidding_strategy="MAXIMIZE_CLICKS",
+        daily_budget_micros=5_000_000,
+        max_cpc_bid_micros=2_000_000,
+        start_date="2030-01-01",
+        end_date="2030-01-30",
+        currency_code="USD",
+        negative_keywords=[],
+    )
+
+    request = service.forecast_request
+    assert request.campaign.geo_target_constants == ["geoTargetConstants/21137"]
+    assert request.campaign.language_constants == ["languageConstants/1000"]
+    assert request.campaign.ad_groups[0].keywords[0].text == "event ticketing software"
+    assert result["network"] == "GOOGLE_SEARCH"
+
+
+def test_generate_keyword_forecast_rejects_unsupported_v24_inputs():
+    gateway = GoogleAdsGateway(settings=None)  # type: ignore[arg-type]
+    fake_client = _FakePlanningClient()
+    gateway.__dict__["client"] = fake_client
+
+    common = {
+        "customer_id": "5703884860",
+        "keywords": ["event ticketing software"],
+        "location_ids": ["21137"],
+        "language_id": "1000",
+        "match_type": "PHRASE",
+        "bidding_strategy": "MAXIMIZE_CLICKS",
+        "daily_budget_micros": 5_000_000,
+        "max_cpc_bid_micros": None,
+        "start_date": "2030-01-01",
+        "end_date": "2030-01-30",
+        "currency_code": "USD",
+    }
+
+    try:
+        gateway.generate_keyword_forecast(
+            **common,
+            network="GOOGLE_SEARCH_AND_PARTNERS",
+            negative_keywords=[],
+        )
+    except ValueError as exc:
+        assert "GOOGLE_SEARCH only" in str(exc)
+    else:
+        raise AssertionError("unsupported forecast network was accepted")
+
+    try:
+        gateway.generate_keyword_forecast(
+            **common,
+            network="GOOGLE_SEARCH",
+            negative_keywords=["jobs"],
+        )
+    except ValueError as exc:
+        assert "negative_keywords are not supported" in str(exc)
+    else:
+        raise AssertionError("unsupported forecast negative keywords were accepted")
