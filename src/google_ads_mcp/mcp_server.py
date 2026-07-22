@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import Field
 
 from google_ads_mcp.audit import AuditLogger
 from google_ads_mcp.config import Settings
-from google_ads_mcp.google_ads import GoogleAdsGateway
+from google_ads_mcp.google_ads import (
+    ConversionActionCategory,
+    ConversionOrigin,
+    GoogleAdsGateway,
+)
 
 mcp = FastMCP("Google Ads MCP")
 settings = Settings.from_env()
@@ -202,6 +207,73 @@ def set_campaign_status(
             campaign_id=campaign_id,
             status=status,
             dry_run=resolved_dry_run,
+        ),
+    )
+
+
+@mcp.tool()
+def set_conversion_action_primary_for_goal(
+    customer_id: str,
+    conversion_action_id: Annotated[str, Field(pattern=r"^[0-9]+$")],
+    primary_for_goal: bool,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Set one conversion action's primary role using its exact numeric ID.
+
+    The required customer_id must be the Google Ads conversion customer that owns the action.
+    A false value makes the action non-biddable outside custom conversion goals. This tool always
+    defaults to Google's validate_only mode; pass dry_run=false to perform the audited write.
+    """
+    resolved_customer_id = settings.customer_id(customer_id)
+    request = {
+        "conversion_action_id": conversion_action_id,
+        "primary_for_goal": primary_for_goal,
+    }
+    return _recorded_write(
+        tool="set_conversion_action_primary_for_goal",
+        customer_id=resolved_customer_id,
+        dry_run=dry_run,
+        request=request,
+        action=lambda: gateway.set_conversion_action_primary_for_goal(
+            customer_id=resolved_customer_id,
+            conversion_action_id=conversion_action_id,
+            primary_for_goal=primary_for_goal,
+            dry_run=dry_run,
+        ),
+    )
+
+
+@mcp.tool()
+def set_customer_conversion_goal_biddable(
+    customer_id: str,
+    category: ConversionActionCategory,
+    origin: ConversionOrigin,
+    biddable: bool,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Set account-default biddability for one exact conversion category/origin pair.
+
+    The required customer_id must be the account's Google Ads conversion customer. The goal must
+    already exist, and campaign-level goal overrides are not changed. This tool always defaults to
+    Google's validate_only mode; pass dry_run=false to perform the audited write.
+    """
+    resolved_customer_id = settings.customer_id(customer_id)
+    request = {
+        "category": category,
+        "origin": origin,
+        "biddable": biddable,
+    }
+    return _recorded_write(
+        tool="set_customer_conversion_goal_biddable",
+        customer_id=resolved_customer_id,
+        dry_run=dry_run,
+        request=request,
+        action=lambda: gateway.set_customer_conversion_goal_biddable(
+            customer_id=resolved_customer_id,
+            category=category,
+            origin=origin,
+            biddable=biddable,
+            dry_run=dry_run,
         ),
     )
 

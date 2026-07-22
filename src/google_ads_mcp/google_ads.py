@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from functools import cached_property
-from typing import Any
+from typing import Any, Literal, TypeAlias
 
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
@@ -10,6 +10,42 @@ from google.protobuf import field_mask_pb2
 
 from google_ads_mcp.config import Settings
 from google_ads_mcp.policy import validate_budget_change, validate_limit
+
+ConversionActionCategory: TypeAlias = Literal[
+    "ADD_TO_CART",
+    "BEGIN_CHECKOUT",
+    "BOOK_APPOINTMENT",
+    "CONTACT",
+    "CONVERTED_LEAD",
+    "DEFAULT",
+    "DOWNLOAD",
+    "ENGAGEMENT",
+    "GET_DIRECTIONS",
+    "IMPORTED_LEAD",
+    "OUTBOUND_CLICK",
+    "PAGE_VIEW",
+    "PHONE_CALL_LEAD",
+    "PURCHASE",
+    "QUALIFIED_LEAD",
+    "REQUEST_QUOTE",
+    "SIGNUP",
+    "STORE_SALE",
+    "STORE_VISIT",
+    "SUBMIT_LEAD_FORM",
+    "SUBSCRIBE_PAID",
+    "YOUTUBE_FOLLOW_ON_VIEWS",
+]
+ConversionOrigin: TypeAlias = Literal[
+    "APP",
+    "CALL_FROM_ADS",
+    "GOOGLE_HOSTED",
+    "STORE",
+    "WEBSITE",
+    "YOUTUBE_HOSTED",
+]
+
+_CONVERSION_ACTION_CATEGORIES = frozenset(ConversionActionCategory.__args__)
+_CONVERSION_ORIGINS = frozenset(ConversionOrigin.__args__)
 
 
 def _serialize_google_ads_row(row: Any) -> dict[str, Any]:
@@ -42,6 +78,19 @@ def _resource_id(value: str, *, field: str) -> str:
     if not cleaned.isdigit():
         raise ValueError(f"{field} must contain digits only")
     return cleaned
+
+
+def _exact_numeric_id(value: str, *, field: str) -> str:
+    if not value or any(character not in "0123456789" for character in value):
+        raise ValueError(f"{field} must contain ASCII digits only")
+    return value
+
+
+def _exact_enum(value: str, *, field: str, allowed: frozenset[str]) -> str:
+    if value not in allowed:
+        choices = ", ".join(sorted(allowed))
+        raise ValueError(f"{field} must be an exact Google Ads enum name: {choices}")
+    return value
 
 
 def _raise_clear_planning_access_error(exc: GoogleAdsException) -> None:
@@ -363,6 +412,87 @@ class GoogleAdsGateway:
         return {
             "resource_names": [result.resource_name for result in response.results],
             "status": normalized,
+            "validate_only": dry_run,
+        }
+
+    def set_conversion_action_primary_for_goal(
+        self,
+        *,
+        customer_id: str,
+        conversion_action_id: str,
+        primary_for_goal: bool,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        exact_conversion_action_id = _exact_numeric_id(
+            conversion_action_id,
+            field="conversion_action_id",
+        )
+        service = self.client.get_service("ConversionActionService")
+        resource_name = service.conversion_action_path(
+            customer_id,
+            exact_conversion_action_id,
+        )
+        operation = self.client.get_type("ConversionActionOperation")
+        operation.update.resource_name = resource_name
+        operation.update.primary_for_goal = primary_for_goal
+        operation.update_mask.CopyFrom(
+            field_mask_pb2.FieldMask(paths=["primary_for_goal"])
+        )
+
+        request = self.client.get_type("MutateConversionActionsRequest")
+        request.customer_id = customer_id
+        request.operations.append(operation)
+        request.validate_only = dry_run
+        response = service.mutate_conversion_actions(request=request)
+        return {
+            "resource_names": [result.resource_name for result in response.results],
+            "resource_name": resource_name,
+            "conversion_action_id": exact_conversion_action_id,
+            "primary_for_goal": primary_for_goal,
+            "validate_only": dry_run,
+        }
+
+    def set_customer_conversion_goal_biddable(
+        self,
+        *,
+        customer_id: str,
+        category: ConversionActionCategory,
+        origin: ConversionOrigin,
+        biddable: bool,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        exact_category = _exact_enum(
+            category,
+            field="category",
+            allowed=_CONVERSION_ACTION_CATEGORIES,
+        )
+        exact_origin = _exact_enum(
+            origin,
+            field="origin",
+            allowed=_CONVERSION_ORIGINS,
+        )
+        service = self.client.get_service("CustomerConversionGoalService")
+        resource_name = service.customer_conversion_goal_path(
+            customer_id,
+            exact_category,
+            exact_origin,
+        )
+        operation = self.client.get_type("CustomerConversionGoalOperation")
+        operation.update.resource_name = resource_name
+        operation.update.biddable = biddable
+        operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["biddable"]))
+
+        request = self.client.get_type("MutateCustomerConversionGoalsRequest")
+        request.customer_id = customer_id
+        request.operations.append(operation)
+        request.validate_only = dry_run
+        response = service.mutate_customer_conversion_goals(request=request)
+        return {
+            "resource_names": [result.resource_name for result in response.results],
+            "resource_name": resource_name,
+            "category": exact_category,
+            "origin": exact_origin,
+            "biddable": biddable,
             "validate_only": dry_run,
         }
 
