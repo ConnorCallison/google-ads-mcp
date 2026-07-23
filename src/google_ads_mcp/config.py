@@ -62,7 +62,20 @@ class Settings:
             raise ValueError(msg)
         return resolved
 
-    def write_customer_id(self, customer_id: str | None) -> str:
+    def write_customer_id(
+        self,
+        customer_id: str | None,
+        *,
+        require_explicit: bool = False,
+    ) -> str:
+        if require_explicit:
+            candidate = (customer_id or "").strip()
+            if (
+                not candidate
+                or not any(character in "0123456789" for character in candidate)
+                or any(character not in "0123456789-" for character in candidate)
+            ):
+                raise ValueError("write requires an explicit numeric customer_id")
         resolved = self.customer_id(customer_id)
         if not self.allowed_customer_ids:
             raise ValueError(

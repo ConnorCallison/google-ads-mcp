@@ -247,7 +247,10 @@ def set_conversion_action_primary_for_goal(
     A false value makes the action non-biddable outside custom conversion goals. This tool always
     defaults to Google's validate_only mode; pass dry_run=false to perform the audited write.
     """
-    resolved_customer_id = settings.write_customer_id(customer_id)
+    resolved_customer_id = settings.write_customer_id(
+        customer_id,
+        require_explicit=True,
+    )
     request = {
         "conversion_action_id": conversion_action_id,
         "primary_for_goal": primary_for_goal,
@@ -280,7 +283,10 @@ def set_customer_conversion_goal_biddable(
     already exist, and campaign-level goal overrides are not changed. This tool always defaults to
     Google's validate_only mode; pass dry_run=false to perform the audited write.
     """
-    resolved_customer_id = settings.write_customer_id(customer_id)
+    resolved_customer_id = settings.write_customer_id(
+        customer_id,
+        require_explicit=True,
+    )
     request = {
         "category": category,
         "origin": origin,

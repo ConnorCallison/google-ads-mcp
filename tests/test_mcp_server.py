@@ -116,6 +116,45 @@ def test_read_tool_remains_available_without_allowlist(monkeypatch, tmp_path):
     ]
 
 
+@pytest.mark.parametrize(
+    "write_call",
+    [
+        lambda: mcp_server.set_conversion_action_primary_for_goal("", "1", False),
+        lambda: mcp_server.set_customer_conversion_goal_biddable(
+            "",
+            "PURCHASE",
+            "WEBSITE",
+            False,
+        ),
+    ],
+)
+def test_goal_writes_reject_blank_customer_instead_of_using_default(
+    monkeypatch,
+    tmp_path,
+    write_call,
+):
+    configured = _settings(
+        tmp_path,
+        allowed_customer_ids={"1234567890"},
+    )
+    monkeypatch.setattr(
+        mcp_server,
+        "settings",
+        Settings(
+            google_ads_yaml_path=configured.google_ads_yaml_path,
+            login_customer_id=None,
+            default_customer_id="1234567890",
+            audit_dir=configured.audit_dir,
+            default_dry_run=True,
+            allowed_customer_ids=configured.allowed_customer_ids,
+            max_budget_change_pct=configured.max_budget_change_pct,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="explicit numeric customer_id"):
+        write_call()
+
+
 def test_recorded_write_persists_started_before_action_and_reuses_audit_id(monkeypatch):
     events: list[tuple[str, str, str]] = []
     monkeypatch.setattr(mcp_server, "audit", _FakeAudit(events))
