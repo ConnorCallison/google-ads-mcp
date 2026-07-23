@@ -54,11 +54,31 @@ class Settings:
         resolved = _optional_digits(customer_id) or self.default_customer_id
         if not resolved:
             msg = (
-                "customer_id is required; pass it to the tool or set "
-                "GOOGLE_ADS_DEFAULT_CUSTOMER_ID"
+                "customer_id is required; pass it to the tool or set GOOGLE_ADS_DEFAULT_CUSTOMER_ID"
             )
             raise ValueError(msg)
         if self.allowed_customer_ids and resolved not in self.allowed_customer_ids:
             msg = f"customer_id {resolved} is not in GOOGLE_ADS_ALLOWED_CUSTOMER_IDS"
             raise ValueError(msg)
+        return resolved
+
+    def write_customer_id(
+        self,
+        customer_id: str | None,
+        *,
+        require_explicit: bool = False,
+    ) -> str:
+        if require_explicit:
+            candidate = (customer_id or "").strip()
+            if (
+                not candidate
+                or not any(character in "0123456789" for character in candidate)
+                or any(character not in "0123456789-" for character in candidate)
+            ):
+                raise ValueError("write requires an explicit numeric customer_id")
+        resolved = self.customer_id(customer_id)
+        if not self.allowed_customer_ids:
+            raise ValueError(
+                "Google Ads writes require a non-empty GOOGLE_ADS_ALLOWED_CUSTOMER_IDS"
+            )
         return resolved

@@ -4,8 +4,26 @@ from types import SimpleNamespace
 from typing import Any
 
 from google.ads.googleads.client import GoogleAdsClient
+from google.ads.googleads.v24.enums.types.conversion_action_category import (
+    ConversionActionCategoryEnum,
+)
+from google.ads.googleads.v24.enums.types.conversion_origin import ConversionOriginEnum
 
-from google_ads_mcp.google_ads import GoogleAdsGateway, _serialize_google_ads_row
+from google_ads_mcp.google_ads import (
+    _CONVERSION_ACTION_CATEGORIES,
+    _CONVERSION_ORIGINS,
+    GoogleAdsGateway,
+    _serialize_google_ads_row,
+)
+
+
+def test_conversion_goal_literals_match_the_pinned_v24_client():
+    excluded = {"UNKNOWN", "UNSPECIFIED"}
+    categories = set(ConversionActionCategoryEnum.ConversionActionCategory.__members__) - excluded
+    origins = set(ConversionOriginEnum.ConversionOrigin.__members__) - excluded
+
+    assert categories == _CONVERSION_ACTION_CATEGORIES
+    assert origins == _CONVERSION_ORIGINS
 
 
 class _FakeGoogleAdsRow:
@@ -80,6 +98,185 @@ def test_set_campaign_status_uses_validate_only_request():
         "status": "PAUSED",
         "validate_only": True,
     }
+
+
+class _FakeUpdateMask:
+    def __init__(self) -> None:
+        self.paths: list[str] = []
+
+    def CopyFrom(self, value: Any) -> None:
+        self.paths = list(value.paths)
+
+
+class _FakeConversionActionService:
+    def __init__(self) -> None:
+        self.request = None
+
+    def conversion_action_path(self, customer_id: str, conversion_action_id: str) -> str:
+        return f"customers/{customer_id}/conversionActions/{conversion_action_id}"
+
+    def mutate_conversion_actions(self, *, request: Any) -> Any:
+        self.request = request
+        return SimpleNamespace(
+            results=[SimpleNamespace(resource_name=request.operations[0].update.resource_name)]
+        )
+
+
+class _FakeConversionActionClient:
+    def __init__(self) -> None:
+        self.service = _FakeConversionActionService()
+
+    def get_service(self, name: str) -> _FakeConversionActionService:
+        assert name == "ConversionActionService"
+        return self.service
+
+    def get_type(self, name: str) -> Any:
+        if name == "ConversionActionOperation":
+            return SimpleNamespace(
+                update=SimpleNamespace(resource_name="", primary_for_goal=None),
+                update_mask=_FakeUpdateMask(),
+            )
+        if name == "MutateConversionActionsRequest":
+            return SimpleNamespace(customer_id="", operations=[], validate_only=False)
+        raise AssertionError(f"Unexpected type request: {name}")
+
+
+def test_set_conversion_action_primary_for_goal_uses_exact_id_and_validate_only():
+    gateway = GoogleAdsGateway(settings=None)  # type: ignore[arg-type]
+    fake_client = _FakeConversionActionClient()
+    gateway.__dict__["client"] = fake_client
+
+    result = gateway.set_conversion_action_primary_for_goal(
+        customer_id="5703884860",
+        conversion_action_id="7268783163",
+        primary_for_goal=False,
+        dry_run=True,
+    )
+
+    request = fake_client.service.request
+    operation = request.operations[0]
+    assert request.customer_id == "5703884860"
+    assert request.validate_only is True
+    assert operation.update.resource_name == ("customers/5703884860/conversionActions/7268783163")
+    assert operation.update.primary_for_goal is False
+    assert operation.update_mask.paths == ["primary_for_goal"]
+    assert result == {
+        "resource_names": ["customers/5703884860/conversionActions/7268783163"],
+        "resource_name": "customers/5703884860/conversionActions/7268783163",
+        "conversion_action_id": "7268783163",
+        "primary_for_goal": False,
+        "validate_only": True,
+    }
+
+
+def test_set_conversion_action_primary_for_goal_rejects_non_exact_id():
+    gateway = GoogleAdsGateway(settings=None)  # type: ignore[arg-type]
+    fake_client = _FakeConversionActionClient()
+    gateway.__dict__["client"] = fake_client
+
+    try:
+        gateway.set_conversion_action_primary_for_goal(
+            customer_id="5703884860",
+            conversion_action_id="7-268-783-163",
+            primary_for_goal=True,
+            dry_run=True,
+        )
+    except ValueError as exc:
+        assert "ASCII digits only" in str(exc)
+    else:
+        raise AssertionError("non-exact conversion action ID was accepted")
+    assert fake_client.service.request is None
+
+
+class _FakeCustomerConversionGoalService:
+    def __init__(self) -> None:
+        self.request = None
+
+    def customer_conversion_goal_path(
+        self,
+        customer_id: str,
+        category: str,
+        origin: str,
+    ) -> str:
+        return f"customers/{customer_id}/customerConversionGoals/{category}~{origin}"
+
+    def mutate_customer_conversion_goals(self, *, request: Any) -> Any:
+        self.request = request
+        return SimpleNamespace(
+            results=[SimpleNamespace(resource_name=request.operations[0].update.resource_name)]
+        )
+
+
+class _FakeCustomerConversionGoalClient:
+    def __init__(self) -> None:
+        self.service = _FakeCustomerConversionGoalService()
+
+    def get_service(self, name: str) -> _FakeCustomerConversionGoalService:
+        assert name == "CustomerConversionGoalService"
+        return self.service
+
+    def get_type(self, name: str) -> Any:
+        if name == "CustomerConversionGoalOperation":
+            return SimpleNamespace(
+                update=SimpleNamespace(resource_name="", biddable=None),
+                update_mask=_FakeUpdateMask(),
+            )
+        if name == "MutateCustomerConversionGoalsRequest":
+            return SimpleNamespace(customer_id="", operations=[], validate_only=False)
+        raise AssertionError(f"Unexpected type request: {name}")
+
+
+def test_set_customer_conversion_goal_biddable_uses_exact_enums_and_validate_only():
+    gateway = GoogleAdsGateway(settings=None)  # type: ignore[arg-type]
+    fake_client = _FakeCustomerConversionGoalClient()
+    gateway.__dict__["client"] = fake_client
+
+    result = gateway.set_customer_conversion_goal_biddable(
+        customer_id="5703884860",
+        category="PURCHASE",
+        origin="WEBSITE",
+        biddable=True,
+        dry_run=True,
+    )
+
+    request = fake_client.service.request
+    operation = request.operations[0]
+    assert request.customer_id == "5703884860"
+    assert request.validate_only is True
+    assert operation.update.resource_name == (
+        "customers/5703884860/customerConversionGoals/PURCHASE~WEBSITE"
+    )
+    assert operation.update.biddable is True
+    assert operation.update_mask.paths == ["biddable"]
+    assert result == {
+        "resource_names": ["customers/5703884860/customerConversionGoals/PURCHASE~WEBSITE"],
+        "resource_name": ("customers/5703884860/customerConversionGoals/PURCHASE~WEBSITE"),
+        "category": "PURCHASE",
+        "origin": "WEBSITE",
+        "biddable": True,
+        "validate_only": True,
+    }
+
+
+def test_set_customer_conversion_goal_biddable_rejects_non_exact_enums():
+    gateway = GoogleAdsGateway(settings=None)  # type: ignore[arg-type]
+    fake_client = _FakeCustomerConversionGoalClient()
+    gateway.__dict__["client"] = fake_client
+
+    for category, origin in [("purchase", "WEBSITE"), ("PURCHASE", "web")]:
+        try:
+            gateway.set_customer_conversion_goal_biddable(
+                customer_id="5703884860",
+                category=category,  # type: ignore[arg-type]
+                origin=origin,  # type: ignore[arg-type]
+                biddable=False,
+                dry_run=True,
+            )
+        except ValueError as exc:
+            assert "exact Google Ads enum name" in str(exc)
+        else:
+            raise AssertionError("non-exact conversion goal enum was accepted")
+    assert fake_client.service.request is None
 
 
 def test_apply_recommendation_dry_run_does_not_call_google():

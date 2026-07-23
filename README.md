@@ -16,6 +16,8 @@ policy, and writes a JSONL audit record.
 - Inspect campaign budgets.
 - Set campaign budget amounts.
 - Pause, enable, or remove campaigns.
+- Mark an exact conversion action as primary or secondary for bidding.
+- Set account-default goal biddability for an exact conversion category/origin pair.
 - Add campaign-level negative keywords.
 - Apply Google Ads recommendations.
 
@@ -89,9 +91,11 @@ The server is write-capable. The defaults are deliberately reversible:
 
 - `GOOGLE_ADS_MCP_DRY_RUN=true` means writes call Google Ads with `validate_only`.
 - Per-tool calls can pass `dry_run=false` to actually mutate the account.
-- `GOOGLE_ADS_ALLOWED_CUSTOMER_IDS` can restrict which accounts this server touches.
+- `GOOGLE_ADS_ALLOWED_CUSTOMER_IDS` must contain the target customer for every write. An empty
+  allowlist leaves reads available but makes every write fail closed.
 - `GOOGLE_ADS_MAX_BUDGET_CHANGE_PCT` blocks unexpectedly large budget changes.
-- Every write produces an audit record under `audit/YYYY-MM-DD.jsonl`.
+- Every write persists a `started` audit record before the provider call, then appends a terminal
+  `succeeded` or `failed` record with the same audit ID under `audit/YYYY-MM-DD.jsonl`.
 
 ## Useful GAQL
 
@@ -112,6 +116,50 @@ returns Google's non-guaranteed traffic and cost forecast without creating campa
 
 Keyword planning calls are more tightly rate-limited than normal reporting calls. Cache results and
 rerun them only when the keyword set, targeting, bid strategy, budget, or forecast period changes.
+
+## Conversion Goal Controls
+
+Use `search_google_ads` to inspect the conversion action IDs and existing customer goals before
+calling either write tool. The two goal controls require an explicit customer ID and default to
+`dry_run=true`, which sends a Google Ads `validate_only` mutation and records it in the audit log.
+
+```json
+{
+  "tool": "set_conversion_action_primary_for_goal",
+  "arguments": {
+    "customer_id": "1234567890",
+    "conversion_action_id": "9876543210",
+    "primary_for_goal": false
+  }
+}
+```
+
+`conversion_action_id` must be the exact digits-only ID. Setting `primary_for_goal=false` makes
+that action non-biddable for customer and campaign goals, but Google Ads custom conversion goals
+can still bid on it. Setting it to true does not make the action biddable by itself; the matching
+customer or campaign goal must also be biddable.
+
+```json
+{
+  "tool": "set_customer_conversion_goal_biddable",
+  "arguments": {
+    "customer_id": "1234567890",
+    "category": "PURCHASE",
+    "origin": "WEBSITE",
+    "biddable": true
+  }
+}
+```
+
+`category` and `origin` are exact, case-sensitive Google Ads enum names exposed by the MCP tool
+schema. Customer conversion goals are automatically created by Google Ads and can only be updated,
+not created or removed. The request customer must be the account's conversion customer. A
+customer-goal update changes the account default only; campaigns with campaign-level goal
+overrides are unaffected.
+
+Official references: [conversion goal overview](https://developers.google.com/google-ads/api/docs/conversions/goals/overview),
+[customer goals](https://developers.google.com/google-ads/api/docs/conversions/goals/customer-goals),
+and [`ConversionAction.primary_for_goal`](https://developers.google.com/google-ads/api/reference/rpc/v24/ConversionAction#primary_for_goal).
 
 ## Development
 
