@@ -435,9 +435,7 @@ class GoogleAdsGateway:
         operation = self.client.get_type("ConversionActionOperation")
         operation.update.resource_name = resource_name
         operation.update.primary_for_goal = primary_for_goal
-        operation.update_mask.CopyFrom(
-            field_mask_pb2.FieldMask(paths=["primary_for_goal"])
-        )
+        operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["primary_for_goal"]))
 
         request = self.client.get_type("MutateConversionActionsRequest")
         request.customer_id = customer_id

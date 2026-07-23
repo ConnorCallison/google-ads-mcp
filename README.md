@@ -91,9 +91,11 @@ The server is write-capable. The defaults are deliberately reversible:
 
 - `GOOGLE_ADS_MCP_DRY_RUN=true` means writes call Google Ads with `validate_only`.
 - Per-tool calls can pass `dry_run=false` to actually mutate the account.
-- `GOOGLE_ADS_ALLOWED_CUSTOMER_IDS` can restrict which accounts this server touches.
+- `GOOGLE_ADS_ALLOWED_CUSTOMER_IDS` must contain the target customer for every write. An empty
+  allowlist leaves reads available but makes every write fail closed.
 - `GOOGLE_ADS_MAX_BUDGET_CHANGE_PCT` blocks unexpectedly large budget changes.
-- Every write produces an audit record under `audit/YYYY-MM-DD.jsonl`.
+- Every write persists a `started` audit record before the provider call, then appends a terminal
+  `succeeded` or `failed` record with the same audit ID under `audit/YYYY-MM-DD.jsonl`.
 
 ## Useful GAQL
 

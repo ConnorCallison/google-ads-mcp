@@ -31,25 +31,48 @@ def _recorded_write(
     request: dict[str, Any],
     action,
 ) -> dict[str, Any]:
-    try:
-        response = action()
-    except Exception as exc:
-        record = audit.write(
-            tool=tool,
-            customer_id=customer_id,
-            dry_run=dry_run,
-            request=request,
-            error=str(exc),
-        )
-        raise RuntimeError(f"{exc} (audit_id={record.id})") from exc
-    record = audit.write(
+    started = audit.write(
         tool=tool,
         customer_id=customer_id,
         dry_run=dry_run,
         request=request,
-        response=response,
+        status="started",
     )
-    return {"audit_id": record.id, **response}
+    try:
+        response = action()
+    except Exception as exc:
+        try:
+            audit.write(
+                tool=tool,
+                customer_id=customer_id,
+                dry_run=dry_run,
+                request=request,
+                status="failed",
+                audit_id=started.id,
+                error=str(exc),
+            )
+        except Exception as terminal_audit_exc:
+            raise RuntimeError(
+                f"{exc} (audit_id={started.id}; terminal audit write failed: {terminal_audit_exc})"
+            ) from exc
+        raise RuntimeError(f"{exc} (audit_id={started.id})") from exc
+
+    try:
+        audit.write(
+            tool=tool,
+            customer_id=customer_id,
+            dry_run=dry_run,
+            request=request,
+            status="succeeded",
+            audit_id=started.id,
+            response=response,
+        )
+    except Exception as terminal_audit_exc:
+        raise RuntimeError(
+            "external action succeeded but terminal audit write failed "
+            f"(audit_id={started.id}): {terminal_audit_exc}"
+        ) from terminal_audit_exc
+    return {"audit_id": started.id, **response}
 
 
 @mcp.tool()
@@ -163,7 +186,7 @@ def set_campaign_budget(
     dry_run: bool | None = None,
 ) -> dict[str, Any]:
     """Set a campaign budget amount in micros. Pass dry_run=false to perform the write."""
-    resolved_customer_id = settings.customer_id(customer_id)
+    resolved_customer_id = settings.write_customer_id(customer_id)
     resolved_dry_run = _dry_run(dry_run)
     request = {
         "budget_id": budget_id,
@@ -191,7 +214,7 @@ def set_campaign_status(
     dry_run: bool | None = None,
 ) -> dict[str, Any]:
     """Set a campaign status to ENABLED, PAUSED, or REMOVED."""
-    resolved_customer_id = settings.customer_id(customer_id)
+    resolved_customer_id = settings.write_customer_id(customer_id)
     resolved_dry_run = _dry_run(dry_run)
     request = {
         "campaign_id": campaign_id,
@@ -224,7 +247,7 @@ def set_conversion_action_primary_for_goal(
     A false value makes the action non-biddable outside custom conversion goals. This tool always
     defaults to Google's validate_only mode; pass dry_run=false to perform the audited write.
     """
-    resolved_customer_id = settings.customer_id(customer_id)
+    resolved_customer_id = settings.write_customer_id(customer_id)
     request = {
         "conversion_action_id": conversion_action_id,
         "primary_for_goal": primary_for_goal,
@@ -257,7 +280,7 @@ def set_customer_conversion_goal_biddable(
     already exist, and campaign-level goal overrides are not changed. This tool always defaults to
     Google's validate_only mode; pass dry_run=false to perform the audited write.
     """
-    resolved_customer_id = settings.customer_id(customer_id)
+    resolved_customer_id = settings.write_customer_id(customer_id)
     request = {
         "category": category,
         "origin": origin,
@@ -287,7 +310,7 @@ def add_campaign_negative_keyword(
     dry_run: bool | None = None,
 ) -> dict[str, Any]:
     """Add a campaign-level negative keyword with BROAD, PHRASE, or EXACT match."""
-    resolved_customer_id = settings.customer_id(customer_id)
+    resolved_customer_id = settings.write_customer_id(customer_id)
     resolved_dry_run = _dry_run(dry_run)
     request = {
         "campaign_id": campaign_id,
@@ -316,7 +339,7 @@ def apply_recommendation(
     dry_run: bool | None = None,
 ) -> dict[str, Any]:
     """Apply a Google Ads recommendation by numeric recommendation ID."""
-    resolved_customer_id = settings.customer_id(customer_id)
+    resolved_customer_id = settings.write_customer_id(customer_id)
     resolved_dry_run = _dry_run(dry_run)
     request = {"recommendation_id": recommendation_id}
     return _recorded_write(

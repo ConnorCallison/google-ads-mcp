@@ -139,9 +139,7 @@ def test_set_conversion_action_primary_for_goal_uses_exact_id_and_validate_only(
     operation = request.operations[0]
     assert request.customer_id == "5703884860"
     assert request.validate_only is True
-    assert operation.update.resource_name == (
-        "customers/5703884860/conversionActions/7268783163"
-    )
+    assert operation.update.resource_name == ("customers/5703884860/conversionActions/7268783163")
     assert operation.update.primary_for_goal is False
     assert operation.update_mask.paths == ["primary_for_goal"]
     assert result == {
@@ -233,12 +231,8 @@ def test_set_customer_conversion_goal_biddable_uses_exact_enums_and_validate_onl
     assert operation.update.biddable is True
     assert operation.update_mask.paths == ["biddable"]
     assert result == {
-        "resource_names": [
-            "customers/5703884860/customerConversionGoals/PURCHASE~WEBSITE"
-        ],
-        "resource_name": (
-            "customers/5703884860/customerConversionGoals/PURCHASE~WEBSITE"
-        ),
+        "resource_names": ["customers/5703884860/customerConversionGoals/PURCHASE~WEBSITE"],
+        "resource_name": ("customers/5703884860/customerConversionGoals/PURCHASE~WEBSITE"),
         "category": "PURCHASE",
         "origin": "WEBSITE",
         "biddable": True,
