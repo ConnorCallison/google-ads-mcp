@@ -4,8 +4,26 @@ from types import SimpleNamespace
 from typing import Any
 
 from google.ads.googleads.client import GoogleAdsClient
+from google.ads.googleads.v24.enums.types.conversion_action_category import (
+    ConversionActionCategoryEnum,
+)
+from google.ads.googleads.v24.enums.types.conversion_origin import ConversionOriginEnum
 
-from google_ads_mcp.google_ads import GoogleAdsGateway, _serialize_google_ads_row
+from google_ads_mcp.google_ads import (
+    _CONVERSION_ACTION_CATEGORIES,
+    _CONVERSION_ORIGINS,
+    GoogleAdsGateway,
+    _serialize_google_ads_row,
+)
+
+
+def test_conversion_goal_literals_match_the_pinned_v24_client():
+    excluded = {"UNKNOWN", "UNSPECIFIED"}
+    categories = set(ConversionActionCategoryEnum.ConversionActionCategory.__members__) - excluded
+    origins = set(ConversionOriginEnum.ConversionOrigin.__members__) - excluded
+
+    assert categories == _CONVERSION_ACTION_CATEGORIES
+    assert origins == _CONVERSION_ORIGINS
 
 
 class _FakeGoogleAdsRow:
